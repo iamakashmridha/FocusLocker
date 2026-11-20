@@ -1,0 +1,470 @@
+name: Build FocusLocker APK (1-Click)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Generate & Assemble FocusLocker APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate Complete FocusLocker Source Files
+        shell: bash
+        run: |
+          mkdir -p app/src/main/java/com/focuslocker/app/data \
+            app/src/main/java/com/focuslocker/app/receiver \
+            app/src/main/java/com/focuslocker/app/service \
+            app/src/main/java/com/focuslocker/app/ui/adapter \
+            app/src/main/java/com/focuslocker/app/util \
+            app/src/main/res/drawable \
+            app/src/main/res/layout \
+            app/src/main/res/mipmap-anydpi-v26 \
+            app/src/main/res/values \
+            app/src/main/res/xml
+
+          cat << 'FOCUS_EOF' > gradle.properties
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          android.nonTransitiveRClass=true
+          FOCUS_EOF
+
+          cat << 'FOCUS_EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "FocusLocker"
+          include ':app'
+          FOCUS_EOF
+
+          cat << 'FOCUS_EOF' > build.gradle
+          plugins {
+              id 'com.android.application' version '8.7.2' apply false
+              id 'org.jetbrains.kotlin.android' version '1.9.25' apply false
+          }
+          FOCUS_EOF
+
+          cat << 'FOCUS_EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
+
+          android {
+              namespace 'com.focuslocker.app'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId "com.focuslocker.app"
+                  minSdk 26
+                  targetSdk 35
+                  versionCode 1
+                  versionName "1.0.0"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+
+              buildFeatures {
+                  viewBinding true
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.13.1'
+              implementation 'androidx.appcompat:appcompat:1.7.0'
+              implementation 'com.google.android.material:material:1.12.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              implementation 'androidx.recyclerview:recyclerview:1.3.2'
+              implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.6'
+              implementation 'com.google.code.gson:gson:2.11.0'
+          }
+          FOCUS_EOF
+
+          cat << 'FOCUS_EOF' > app/proguard-rules.pro
+          -keep class com.focuslocker.app.data.ScheduleItem { *; }
+          FOCUS_EOF
+
+          cat << 'FOCUS_EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:tools="http://schemas.android.com/tools">
+
+              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+              <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+              <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission
+                  android:name="android.permission.QUERY_ALL_PACKAGES"
+                  tools:ignore="QueryAllPackagesPermission" />
+
+              <queries>
+                  <intent>
+                      <action android:name="android.intent.action.MAIN" />
+                      <category android:name="android.intent.category.LAUNCHER" />
+                  </intent>
+                  <intent>
+                      <action android:name="android.intent.action.DIAL" />
+                  </intent>
+                  <intent>
+                      <action android:name="android.intent.action.CALL_EMERGENCY" />
+                  </intent>
+              </queries>
+
+              <application
+                  android:allowBackup="false"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.FocusLocker">
+
+                  <activity
+                      android:name=".ui.MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTop"
+                      android:screenOrientation="portrait">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+
+                  <activity
+                      android:name=".ui.LockScreenActivity"
+                      android:directBootAware="true"
+                      android:excludeFromRecents="true"
+                      android:exported="false"
+                      android:launchMode="singleTask"
+                      android:screenOrientation="portrait"
+                      android:showWhenLocked="true"
+                      android:turnScreenOn="true" />
+
+                  <activity
+                      android:name=".ui.AppSelectorActivity"
+                      android:exported="false"
+                      android:screenOrientation="portrait" />
+
+                  <activity
+                      android:name=".ui.SchedulesActivity"
+                      android:exported="false"
+                      android:screenOrientation="portrait" />
+
+                  <service
+                      android:name=".service.FocusAccessibilityService"
+                      android:directBootAware="true"
+                      android:exported="false"
+                      android:label="@string/accessibility_service_label"
+                      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+                      <intent-filter>
+                          <action android:name="android.accessibilityservice.AccessibilityService" />
+                      </intent-filter>
+                      <meta-data
+                          android:name="android.accessibilityservice"
+                          android:resource="@xml/accessibility_service_config" />
+                  </service>
+
+                  <service
+                      android:name=".service.LockForegroundService"
+                      android:directBootAware="true"
+                      android:exported="false"
+                      android:foregroundServiceType="specialUse">
+                      <property
+                          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                          android:value="Enforces active user-initiated focus lock countdown timer and anti-tamper persistence" />
+                  </service>
+
+                  <receiver
+                      android:name=".receiver.DeviceAdminReceiverImpl"
+                      android:description="@string/device_admin_description"
+                      android:exported="true"
+                      android:label="@string/device_admin_label"
+                      android:permission="android.permission.BIND_DEVICE_ADMIN">
+                      <meta-data
+                          android:name="android.app.device_admin"
+                          android:resource="@xml/device_admin" />
+                      <intent-filter>
+                          <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+                      </intent-filter>
+                  </receiver>
+
+                  <receiver
+                      android:name=".receiver.BootReceiver"
+                      android:directBootAware="true"
+                      android:enabled="true"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                          <action android:name="android.intent.action.BOOT_COMPLETED" />
+                          <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                          <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                      </intent-filter>
+                  </receiver>
+
+                  <receiver
+                      android:name=".receiver.ScheduleAlarmReceiver"
+                      android:directBootAware="true"
+                      android:enabled="true"
+                      android:exported="false" />
+
+              </application>
+
+          </manifest>
+          FOCUS_EOF
+
+          cat << 'FOCUS_EOF' > app/src/main/java/com/focuslocker/app/data/ScheduleItem.kt
+          package com.focuslocker.app.data
+
+          data class ScheduleItem(
+              val id: Int,
+              val label: String,
+              val startHour: Int,
+              val startMinute: Int,
+              val durationMinutes: Int,
+              val enabled: Boolean = true
+          )
+          FOCUS_EOF
+
+          cat << 'FOCUS_EOF' > app/src/main/java/com/focuslocker/app/data/LockPreferences.kt
+          package com.focuslocker.app.data
+
+          import android.content.Context
+          import android.content.SharedPreferences
+          import android.os.SystemClock
+          import android.provider.Settings
+          import com.google.gson.Gson
+          import com.google.gson.reflect.TypeToken
+          import java.util.Locale
+
+          object LockPreferences {
+
+              const val MAX_ALLOWED_APPS = 10
+
+              private const val PREF_NAME = "focus_locker_device_prefs"
+              private const val KEY_IS_LOCKED = "is_locked"
+              private const val KEY_REMAINING_AT_CHECKPOINT = "remaining_at_checkpoint_ms"
+              private const val KEY_CHECKPOINT_ELAPSED = "checkpoint_elapsed_ms"
+              private const val KEY_CHECKPOINT_WALL = "checkpoint_wall_ms"
+              private const val KEY_LOCK_END_WALL = "lock_end_wall_ms"
+              private const val KEY_BOOT_COUNT = "checkpoint_boot_count"
+              private const val KEY_ALLOWED_APPS = "allowed_apps_set"
+              private const val KEY_SCHEDULES_JSON = "daily_schedules_json"
+              private const val KEY_NEXT_SCHEDULE_ID = "next_schedule_id"
+
+              private val gson = Gson()
+
+              private fun prefs(context: Context): SharedPreferences {
+                  val deviceContext = context.applicationContext.createDeviceProtectedStorageContext()
+                  return deviceContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+              }
+
+              private fun getBootCount(context: Context): Int {
+                  return try {
+                      Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, 0)
+                  } catch (_: Exception) {
+                      0
+                  }
+              }
+
+              @Synchronized
+              fun startLock(context: Context, durationMs: Long) {
+                  if (durationMs <= 0L) return
+                  val nowElapsed = SystemClock.elapsedRealtime()
+                  val nowWall = System.currentTimeMillis()
+                  val bootCount = getBootCount(context)
+
+                  prefs(context).edit()
+                      .putBoolean(KEY_IS_LOCKED, true)
+                      .putLong(KEY_REMAINING_AT_CHECKPOINT, durationMs)
+                      .putLong(KEY_CHECKPOINT_ELAPSED, nowElapsed)
+                      .putLong(KEY_CHECKPOINT_WALL, nowWall)
+                      .putLong(KEY_LOCK_END_WALL, nowWall + durationMs)
+                      .putInt(KEY_BOOT_COUNT, bootCount)
+                      .apply()
+              }
+
+              @Synchronized
+              fun startOrExtendLock(context: Context, durationMs: Long) {
+                  if (durationMs <= 0L) return
+                  val currentRemaining = getRemainingMillis(context)
+                  val targetDuration = maxOf(currentRemaining, durationMs)
+                  startLock(context, targetDuration)
+              }
+
+              @Synchronized
+              fun getRemainingMillis(context: Context): Long {
+                  val p = prefs(context)
+                  if (!p.getBoolean(KEY_IS_LOCKED, false)) return 0L
+
+                  val savedRemaining = p.getLong(KEY_REMAINING_AT_CHECKPOINT, 0L)
+                  if (savedRemaining <= 0L) {
+                      clearLock(context)
+                      return 0L
+                  }
+
+                  val savedElapsed = p.getLong(KEY_CHECKPOINT_ELAPSED, 0L)
+                  val savedWall = p.getLong(KEY_CHECKPOINT_WALL, 0L)
+                  val savedEndWall = p.getLong(KEY_LOCK_END_WALL, 0L)
+                  val savedBootCount = p.getInt(KEY_BOOT_COUNT, -1)
+
+                  val nowElapsed = SystemClock.elapsedRealtime()
+                  val nowWall = System.currentTimeMillis()
+                  val currentBootCount = getBootCount(context)
+
+                  val sameBootSession = (savedBootCount == currentBootCount) && (nowElapsed >= savedElapsed)
+
+                  val remaining: Long = if (sameBootSession) {
+                      val elapsedDelta = nowElapsed - savedElapsed
+                      (savedRemaining - elapsedDelta).coerceAtLeast(0L)
+                  } else {
+                      val wallDelta = nowWall - savedWall
+                      val reconciled = if (wallDelta > 0L && savedEndWall > 0L) {
+                          val remainingByWall = (savedEndWall - nowWall).coerceAtLeast(0L)
+                          val byCheckpointMinusWall = (savedRemaining - wallDelta).coerceAtLeast(0L)
+                          minOf(savedRemaining, maxOf(remainingByWall, byCheckpointMinusWall))
+                      } else {
+                          (savedRemaining - nowElapsed).coerceAtLeast(0L)
+                      }
+
+                      if (reconciled > 0L) {
+                          p.edit()
+                              .putLong(KEY_REMAINING_AT_CHECKPOINT, reconciled)
+                              .putLong(KEY_CHECKPOINT_ELAPSED, nowElapsed)
+                              .putLong(KEY_CHECKPOINT_WALL, nowWall)
+                              .putLong(KEY_LOCK_END_WALL, nowWall + reconciled)
+                              .putInt(KEY_BOOT_COUNT, currentBootCount)
+                              .apply()
+                      }
+                      reconciled
+                  }
+
+                  if (remaining <= 0L) {
+                      clearLock(context)
+                      return 0L
+                  }
+                  return remaining
+              }
+
+              @Synchronized
+              fun updateCheckpoint(context: Context) {
+                  val remaining = getRemainingMillis(context)
+                  if (remaining <= 0L) return
+
+                  val nowElapsed = SystemClock.elapsedRealtime()
+                  val nowWall = System.currentTimeMillis()
+                  val currentBootCount = getBootCount(context)
+
+                  prefs(context).edit()
+                      .putLong(KEY_REMAINING_AT_CHECKPOINT, remaining)
+                      .putLong(KEY_CHECKPOINT_ELAPSED, nowElapsed)
+                      .putLong(KEY_CHECKPOINT_WALL, nowWall)
+                      .putLong(KEY_LOCK_END_WALL, nowWall + remaining)
+                      .putInt(KEY_BOOT_COUNT, currentBootCount)
+                      .apply()
+              }
+
+              @Synchronized
+              fun isCurrentlyLocked(context: Context): Boolean {
+                  return getRemainingMillis(context) > 0L
+              }
+
+              @Synchronized
+              fun clearLock(context: Context) {
+                  prefs(context).edit()
+                      .putBoolean(KEY_IS_LOCKED, false)
+                      .putLong(KEY_REMAINING_AT_CHECKPOINT, 0L)
+                      .putLong(KEY_CHECKPOINT_ELAPSED, 0L)
+                      .putLong(KEY_CHECKPOINT_WALL, 0L)
+                      .putLong(KEY_LOCK_END_WALL, 0L)
+                      .apply()
+              }
+
+              fun getAllowedApps(context: Context): Set<String> {
+                  val stored = prefs(context).getStringSet(KEY_ALLOWED_APPS, emptySet()) ?: emptySet()
+                  return HashSet(stored)
+              }
+
+              fun saveAllowedApps(context: Context, packages: Set<String>) {
+                  val capped = packages.take(MAX_ALLOWED_APPS).toSet()
+                  prefs(context).edit()
+                      .putStringSet(KEY_ALLOWED_APPS, HashSet(capped))
+                      .apply()
+              }
+
+              fun getSchedules(context: Context): MutableList<ScheduleItem> {
+                  val json = prefs(context).getString(KEY_SCHEDULES_JSON, null) ?: return mutableListOf()
+                  return try {
+                      val type = object : TypeToken<MutableList<ScheduleItem>>() {}.type
+                      gson.fromJson<MutableList<ScheduleItem>>(json, type) ?: mutableListOf()
+                  } catch (_: Exception) {
+                      mutableListOf()
+                  }
+              }
+
+              fun saveSchedules(context: Context, schedules: List<ScheduleItem>) {
+                  val json = gson.toJson(schedules)
+                  prefs(context).edit()
+                      .putStringSet(KEY_ALLOWED_APPS, getAllowedApps(context))
+                      .putString(KEY_SCHEDULES_JSON, json)
+                      .apply()
+              }
+
+              fun nextScheduleId(context: Context): Int {
+                  val p = prefs(context)
+                  val next = p.getInt(KEY_NEXT_SCHEDULE_ID, 1001)
+                  p.edit().putInt(KEY_NEXT_SCHEDULE_ID, next + 1).apply()
+                  return next
+              }
+
+              fun formatDuration(millis: Long): String {
+                  val totalSeconds = (millis.coerceAtLeast(0L) + 999L) / 1000L
+                  val hours = totalSeconds / 3600L
+                  val minutes = (totalSeconds % 3600L) / 60L
+                  val seconds = totalSeconds % 60L
+                  return String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
+              }
+          }
+          FOCUS_EOF
+
+          cat << 'FOCUS_EOF' > app/src/main/java/com/focuslocker/app/util/PermissionHelper.kt
+          package com.focuslocker.app.util
+
+          import android.app.AlarmManager
+          import android.app.admin.DevicePolicyManager
+          import android.conte
